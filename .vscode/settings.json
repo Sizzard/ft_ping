@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "ft_ping.h": "c",
+        "signal.h": "c",
+        "ip_icmp.h": "c",
+        "strings.h": "c",
+        "features.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "ip.h": "c",
+        "types.h": "c",
+        "in.h": "c"
+    }
+}
