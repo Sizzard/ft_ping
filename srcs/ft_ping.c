@@ -36,63 +36,83 @@ uint16_t get_checksum(const void *buf, size_t len) {
     return (uint16_t)(~sum);
 }
 
-void print_icmp_header(struct icmphdr *icmp) {
-    puts("Parsing of icmp header :");
-    printf("type :      %d\n", icmp->type);
-    printf("code :      %d\n", icmp->code);
-    printf("checksum :  %d\n\n", icmp->checksum);
-}
+char *get_icmp_response(int type_nb, int code) {
+    char *type[44][16];
+    char *res;
 
-char *get_local_ip_for_target(const char *target_ip) {
-    static char local_ip[INET_ADDRSTRLEN];
-    struct sockaddr_in serv;
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    // printf("type_nb : %d, code : %d\n", type_nb, code);
 
-    if (sock < 0)
-        return NULL;
-
-    memset(&serv, 0, sizeof(serv));
-    serv.sin_family = AF_INET;
-    serv.sin_port = htons(53);
-    inet_pton(AF_INET, target_ip, &serv.sin_addr);
-
-    connect(sock, (struct sockaddr *)&serv, sizeof(serv));
-
-    struct sockaddr_in name;
-    socklen_t namelen = sizeof(name);
-    getsockname(sock, (struct sockaddr *)&name, &namelen);
-
-    inet_ntop(AF_INET, &name.sin_addr, local_ip, sizeof(local_ip));
-
-    close(sock);
-    return local_ip;
-}
-
-int ft_ping(char *address) {
-    int fd = -1;
-    int packet_sent = 0;
-    int packet_received = 0;
-    int packet_mean = 0;
-    int packet_len = 0;
-    struct icmphdr *icmp;
-    struct sockaddr_in addr;
-    char *src_address = get_local_ip_for_target(address);
-    char *dst_address = address;
-    char packet[1024] = {0};
-    char recv_buf[1024] = {0};
-
-    char *payload = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-
-    if (!src_address) {
-        fprintf(stderr, "ft_ping: Failed to get hostname\n");
-        return 1;
+    if (type_nb < 0 || type_nb > 44 || code < 0 || code > 16) {
+        return strdup("Bad parsing in response");
     }
 
-    icmp = (struct icmphdr *) packet;
+    type[0][0] = "icmp_seq=%d, ping.ttl=%d, time=%.3f ms\n";
+    type[1][0] = "reserved\n";
+    type[2][0] = type[1][0];
+    type[3][0] = "Destination network unreachable\n";
+    type[3][1] = "Destination host unreachable\n";
+    type[3][2] = "Destination protocol unreachable\n";
+    type[3][3] = "Destination port unreachable\n";
+    type[3][4] = "Fragmentation required, and DF flag set\n";
+    type[3][5] = "Source route failed\n";
+    type[3][6] = "Destination network unknown\n";
+    type[3][7] = "Destination host unknown\n";
+    type[3][8] = "Source host isolated\n";
+    type[3][9] = "Network administratively prohibited\n";
+    type[3][10] = "Host administratively prohibited\n";
+    type[3][11] = "Network unreachable for ToS\n";
+    type[3][12] = "Host unreachable for ToS\n";
+    type[3][13] = "Communication administratively prohibited\n";
+    type[3][14] = "Host Precedence Violation\n";
+    type[3][15] = "Precedence cutoff in effect\n";
+    type[5][0] = "Redirect Datagram for the Network\n";
+    type[5][1] = "Redirect Datagram for the Host\n";
+    type[5][2] = "Redirect Datagram for the ToS & network\n";
+    type[5][3] = "Redirect Datagram for the ToS & host \n";
+    type[8][0] =  "Echo request (used to ping)\n";
+    type[9][0] =  "Router Advertisement\n";
+    type[10][0] =  "Router discovery/selection/solicitation\n";
+    type[11][0] =  "Time to live (TTL) expired in transit\n";
+    type[11][1] =	"Fragment reassembly time exceeded\n";
+    type[12][0] =  "Bad IP Header\n";
+    type[12][1] = type[12][0];
+    type[12][2] = type[12][0];
+    type[13][0] =  "Timestamp\n";
+    type[14][0] =  "Timestamp reply \n";
+
+    res = strdup(type[type_nb][code]);
+
+    return res;
+
+}
+
+char *get_dest_address(struct iphdr *ip) {
+    struct sockaddr_in src;
+    char *src_addr;
+
+    src.sin_addr.s_addr = ip->saddr;
+    src_addr = inet_ntoa(src.sin_addr);
     
-    addr.sin_family = AF_INET;
-    addr.sin_port = 0;
-    addr.sin_addr.s_addr = inet_addr(dst_address);
+    return strdup(src_addr);
+}
+
+t_response parse_response(void *buf, size_t bytes) {
+    struct iphdr *ip = buf;
+    struct icmphdr* icmp = buf + 20;
+    t_response response;
+    response.string = get_icmp_response(icmp->type, icmp->code);
+    response.address = get_dest_address(ip);
+    response.type = icmp->type;
+    (void)bytes;
+    return response;
+}
+
+int craft_echo_packet(char *packet) {
+    int packet_len = 0;
+    struct icmphdr *icmp;
+    char *payload = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    icmp = (struct icmphdr *) packet;
 
     icmp->type = 8;
     icmp->code = 0;
@@ -100,43 +120,79 @@ int ft_ping(char *address) {
     icmp->un.echo.sequence = 0;
     icmp->checksum = 0;
 
-    // packet_len = sizeof(icmp);
-    packet_len = sizeof(icmp) + sizeof(payload);
+    packet_len = sizeof(icmp) + strlen(payload);
+
+    memcpy(packet + (sizeof(icmp)), payload, strlen(payload));
 
     icmp->checksum = get_checksum(icmp, packet_len);
 
-    print_icmp_header(icmp);
+    return packet_len;
+}
 
-    fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-    if (fd == -1) {
+int ft_ping(char *address) {
+    char packet[1024] = {0};
+    char recv_buf[1024] = {0};
+    t_ping ping = {0};
+    struct sockaddr_in addr;
+    int sock = -1;
+    
+    ping.ttl = 5;
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = 0;
+    addr.sin_addr.s_addr = inet_addr(address);
+
+    
+    sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (sock == -1) {
         fprintf(stderr, "ft_ping: Failed to create a Raw Socket (probably a right issue)\n");
         return 1;
     }
+    
+    if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ping.ttl, sizeof(ping.ttl))) {
+        fprintf(stderr, "ft_ping: Failed to change ttl value: setsockopt()");
+        return 1;
+    }
+
+    ping.packet_len = craft_echo_packet(packet);
 
     signal_handler();
+
     while (sigint_g != SIGINT) {
-        int bytes = sendto(fd, packet, packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
+        int bytes = sendto(sock, packet, ping.packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
         if (bytes > 0) {
-            packet_sent++;
+            ping.packet_sent++;
         }
 
-        // printf("\nSent %d bytes to %s\n", bytes, dst_address);
-
-        bytes = recvfrom(fd, recv_buf, sizeof(recv_buf), 0, 0, 0);
+        bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, 0);
         if (bytes > 0) {
-            printf("%d bytes : from %s: ", bytes, dst_address);
-            printf("icmp_seq=%d, ttl=%d, time=%.3f ms\n", packet_received, 64, 1.59999999);
-            packet_received++;
+            bytes -= 20;
+            // print_packet(recv_buf + 20, bytes - 20);
+            t_response response = parse_response(recv_buf, bytes);
+            ping.response = response.string;
+            printf("%d bytes : from %s: ", bytes, response.address);
+            printf(ping.response , ping.packet_received, ping.ttl, 1.59999999);
+            free(response.address);
+            free(ping.response);
+            if (response.type == 0) {
+                ping.packet_received++;
+            }
         }
-
 
         sleep(1);
     }
 
-    packet_mean = (1 - packet_sent / packet_received) * 100;
+    if (ping.packet_received == 0) {
+        ping.packet_mean = 100;
+    }
+    else {
+        ping.packet_mean = (1 - ping.packet_sent / ping.packet_received) * 100;
+    }
 
     printf("--- %s ping statistics ---\n", address);
-    printf("%d packets transmitted, %d packets received, %d%% packet loss\n", packet_sent, packet_received, packet_mean);
+    printf("%d packets transmitted, %d packets received, %d%% packet loss\n", ping.packet_sent, ping.packet_received, ping.packet_mean);
+    close(sock);
     //  free() all
     return 0;
 }
+

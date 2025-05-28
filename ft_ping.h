@@ -16,5 +16,25 @@
 #include <string.h>
 #include <errno.h> 
 
-void opt_man(void);
-int ft_ping(char *address);
+typedef struct s_ping {
+    int     packet_sent;
+    int     packet_received;
+    int     packet_mean;
+    int     packet_len;
+    int     ttl;
+    char    *response;
+}   t_ping;
+
+typedef struct s_response {
+    int     type;
+    char    *string;
+    char    *address;
+}   t_response;
+
+int     ft_ping(char *address);
+void    opt_man(void);
+
+void    print_ip_header(struct iphdr *ip);
+void    print_icmp_header(struct icmphdr *icmp);
+void    print_packet(char *packet, size_t len);
+char    *get_ip_address_from_domain(char *address);

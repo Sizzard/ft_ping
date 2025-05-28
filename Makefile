@@ -1,7 +1,7 @@
 NAME = ft_ping
-SRCS = main.c srcs/opt.c srcs/ft_ping.c
+SRCS = main.c srcs/opt.c srcs/ft_ping.c srcs/debug.c srcs/utils.c
 OBJ = $(SRCS:.c=.o)
-CFLAGS = -Wall -Wextra -Werror
+CFLAGS = -Wall -Wextra -Werror -g3
 
 all: $(NAME)
 
