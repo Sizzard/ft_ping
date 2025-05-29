@@ -17,25 +17,6 @@ void signal_handler() {
     sigaction(SIGINT, &act, NULL);
 }
 
-uint16_t get_checksum(const void *buf, size_t len) {
-    uint32_t sum = 0;
-    const uint16_t *packet = buf;
-
-    while (len > 1) {
-        sum += *packet++;
-        len -= 2;
-    }
-
-    if (len > 0) {
-        sum += *((const uint8_t *)packet);
-    }
-
-    while (sum >> 16)
-        sum = (sum & 0xFFFF) + (sum >> 16);
-
-    return (uint16_t)(~sum);
-}
-
 char *get_icmp_response(int type_nb, int code) {
     char *type[44][16];
     char *res;
@@ -46,7 +27,7 @@ char *get_icmp_response(int type_nb, int code) {
         return strdup("Bad parsing in response");
     }
 
-    type[0][0] = "icmp_seq=%d, ping.ttl=%d, time=%.3f ms\n";
+    type[0][0] = "icmp_seq=%d ttl=%d time=%.3f ms\n";
     type[1][0] = "reserved\n";
     type[2][0] = type[1][0];
     type[3][0] = "Destination network unreachable\n";
@@ -96,101 +77,174 @@ char *get_dest_address(struct iphdr *ip) {
     return strdup(src_addr);
 }
 
-t_response parse_response(void *buf, size_t bytes) {
+t_response parse_response(void *buf) {
     struct iphdr *ip = buf;
     struct icmphdr* icmp = buf + 20;
     t_response response;
     response.string = get_icmp_response(icmp->type, icmp->code);
     response.address = get_dest_address(ip);
     response.type = icmp->type;
-    (void)bytes;
     return response;
 }
 
-int craft_echo_packet(char *packet) {
+void craft_ip_packet(char *packet, t_ping *ping) {
+    int packet_len = 0;
+    struct iphdr *ip = (struct iphdr*)packet;
+
+    ip->version = 4;
+    ip->ihl = 5;
+    ip->tos = 0;
+    ip->tot_len = htons(ping->tot_len);
+    ip->id = htons(12345);
+    ip->frag_off = 0;
+    ip->ttl = ping->ttl;
+    ip->protocol = IPPROTO_ICMP;
+    ip->check = 0;
+    ip->saddr = inet_addr(ping->src);
+    ip->daddr = inet_addr(ping->dst);
+
+    packet_len = sizeof(struct iphdr);
+
+    ip->check = get_checksum(ip, packet_len);
+
+    dump_ip_header(packet);
+}
+
+int craft_icmp_packet(char *packet, t_ping *ping) {
     int packet_len = 0;
     struct icmphdr *icmp;
-    char *payload = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    char *payload = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    int pid = getpid();
 
-    icmp = (struct icmphdr *) packet;
+    icmp = (struct icmphdr *)(packet + sizeof(struct iphdr));
 
     icmp->type = 8;
     icmp->code = 0;
-    icmp->un.echo.id = 0;
-    icmp->un.echo.sequence = 0;
+    icmp->un.echo.id = htons(pid);
+    icmp->un.echo.sequence = htons(ping->packet_sent);
     icmp->checksum = 0;
 
     packet_len = sizeof(icmp) + strlen(payload);
 
-    memcpy(packet + (sizeof(icmp)), payload, strlen(payload));
+    memcpy(packet + sizeof(struct iphdr) + (sizeof(icmp)), payload, strlen(payload));
 
     icmp->checksum = get_checksum(icmp, packet_len);
 
     return packet_len;
 }
 
-int ft_ping(char *address) {
+// typedef struct s_ping {
+//     int     packet_sent;
+//     int     packet_received;
+//     int     packet_mean;
+//     int     packet_len;
+//     int     ttl;
+//     char    *response;
+//     char    *src;
+//     char    *dst;
+// }   t_ping;
+
+t_ping *init_ping_packet(char *dst, int tot_len, int ttl) {
+    t_ping *ping = malloc(sizeof(t_ping));
+
+    char *src_address =  get_src_addr();
+    if (src_address == NULL) {
+        return NULL;
+    }
+
+    if (ping) {
+        ping->packet_sent = 0;
+        ping->packet_received = 0;
+        ping->packet_mean = 0;
+        ping->packet_len = 0;
+        ping->ttl = ttl;
+        ping->src = src_address;
+        ping->dst = dst;
+        ping->tot_len = tot_len;
+    }
+    return ping;
+}
+
+int ft_ping(char *real_address, char *address) {
     char packet[1024] = {0};
     char recv_buf[1024] = {0};
-    t_ping ping = {0};
+    t_ping *ping;
     struct sockaddr_in addr;
-    int sock = -1;
-    
-    ping.ttl = 5;
+    bool verbose = true;
+    int sock;
+    int one = 1;
+
+    ping = init_ping_packet(address, sizeof(struct iphdr) + 64, 63);
+    if (ping == NULL) {
+        fprintf(stderr, "ft_ping: Ran out of memory\n");
+        return 1;
+    }
 
     addr.sin_family = AF_INET;
     addr.sin_port = 0;
     addr.sin_addr.s_addr = inet_addr(address);
 
+    craft_ip_packet(packet, ping);
     
     sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (sock == -1) {
         fprintf(stderr, "ft_ping: Failed to create a Raw Socket (probably a right issue)\n");
         return 1;
     }
-    
-    if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ping.ttl, sizeof(ping.ttl))) {
-        fprintf(stderr, "ft_ping: Failed to change ttl value: setsockopt()");
+
+    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one))) {
+        fprintf(stderr, "ft_ping: Failed to set header value: setsockopt()");
         return 1;
     }
-
-    ping.packet_len = craft_echo_packet(packet);
-
+    
     signal_handler();
-
+    
+    if (verbose) {
+        printf("PING %s (%s): %d data bytes\n", real_address, address, ping->packet_len - 8);
+    }
+    else {
+        printf("PING %s (%s): %d data bytes\n", real_address, address, ping->packet_len - 8);
+    }
+    
     while (sigint_g != SIGINT) {
-        int bytes = sendto(sock, packet, ping.packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
+
+        ping->packet_len = sizeof(struct iphdr) + craft_icmp_packet(packet, ping);
+
+        int bytes = sendto(sock, packet, ping->packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
         if (bytes > 0) {
-            ping.packet_sent++;
+            ping->packet_sent++;
         }
+
+        // dump_packet(packet);
 
         bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, 0);
         if (bytes > 0) {
             bytes -= 20;
-            // print_packet(recv_buf + 20, bytes - 20);
-            t_response response = parse_response(recv_buf, bytes);
-            ping.response = response.string;
+            t_response response = parse_response(recv_buf);
+            ping->response = response.string;
             printf("%d bytes : from %s: ", bytes, response.address);
-            printf(ping.response , ping.packet_received, ping.ttl, 1.59999999);
-            free(response.address);
-            free(ping.response);
             if (response.type == 0) {
-                ping.packet_received++;
+                printf(ping->response , ping->packet_received, ping->ttl, 1.59999999);
+                ping->packet_received++;
             }
+            else {
+                
+            }
+            free(response.address);
+            free(ping->response);
         }
-
         sleep(1);
     }
 
-    if (ping.packet_received == 0) {
-        ping.packet_mean = 100;
+    if (ping->packet_received == 0) {
+        ping->packet_mean = 100;
     }
     else {
-        ping.packet_mean = (1 - ping.packet_sent / ping.packet_received) * 100;
+        ping->packet_mean = (1 - ping->packet_sent / ping->packet_received) * 100;
     }
 
-    printf("--- %s ping statistics ---\n", address);
-    printf("%d packets transmitted, %d packets received, %d%% packet loss\n", ping.packet_sent, ping.packet_received, ping.packet_mean);
+    printf("--- %s ping statistics ---\n", real_address);
+    printf("%d packets transmitted, %d packets received, %d%% packet loss\n", ping->packet_sent, ping->packet_received, ping->packet_mean);
     close(sock);
     //  free() all
     return 0;

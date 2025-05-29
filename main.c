@@ -10,7 +10,7 @@ int main(int ac, char **av) {
     }
 
     ip_address = get_ip_address_from_domain(av[1]);
-    res = ft_ping(av[1]);
+    res = ft_ping(av[1], ip_address);
     free(ip_address);
     return res;
 }
