@@ -106,8 +106,6 @@ void craft_ip_packet(char *packet, t_ping *ping) {
     packet_len = sizeof(struct iphdr);
 
     ip->check = get_checksum(ip, packet_len);
-
-    dump_ip_header(packet);
 }
 
 int craft_icmp_packet(char *packet, t_ping *ping) {
@@ -196,6 +194,11 @@ int ft_ping(char *real_address, char *address) {
         fprintf(stderr, "ft_ping: Failed to set header value: setsockopt()");
         return 1;
     }
+
+    fd_set readfds;
+    struct timeval tv = {0};
+
+    fcntl(sock, F_SETFL, O_NONBLOCK);
     
     signal_handler();
     
@@ -208,6 +211,9 @@ int ft_ping(char *real_address, char *address) {
     
     while (sigint_g != SIGINT) {
 
+        FD_ZERO(&readfds);
+        FD_SET(sock, &readfds);
+        
         ping->packet_len = sizeof(struct iphdr) + craft_icmp_packet(packet, ping);
 
         int bytes = sendto(sock, packet, ping->packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
@@ -216,22 +222,27 @@ int ft_ping(char *real_address, char *address) {
         }
 
         // dump_packet(packet);
+        int rv = select(sock + 1, &readfds, NULL, NULL, &tv);
 
-        bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, 0);
-        if (bytes > 0) {
-            bytes -= 20;
-            t_response response = parse_response(recv_buf);
-            ping->response = response.string;
-            printf("%d bytes : from %s: ", bytes, response.address);
-            if (response.type == 0) {
-                printf(ping->response , ping->packet_received, ping->ttl, 1.59999999);
-                ping->packet_received++;
+        if (rv == 1) {
+            printf("TEST\n");
+            bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, 0);
+            if (bytes > 0) {
+                bytes -= 20;
+                t_response response = parse_response(recv_buf);
+                ping->response = response.string;
+                printf("%d bytes : from %s: ", bytes, response.address);
+                if (response.type == 0) {
+                    printf(ping->response , ping->packet_received, ping->ttl, 1.59999999);
+                    ping->packet_received++;
+                }
+                else {
+                    printf(ping->response , ping->packet_received, ping->ttl, 1.59999999);
+                    dump_ip_header(recv_buf);
+                }
+                free(response.address);
+                free(ping->response);
             }
-            else {
-                
-            }
-            free(response.address);
-            free(ping->response);
         }
         sleep(1);
     }

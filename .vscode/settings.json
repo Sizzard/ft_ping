@@ -9,6 +9,12 @@
         "stdlib.h": "c",
         "ip.h": "c",
         "types.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "errno.h": "c",
+        "unistd.h": "c",
+        "stdint.h": "c",
+        "netdb.h": "c",
+        "string.h": "c",
+        "fcntl.h": "c"
     }
 }

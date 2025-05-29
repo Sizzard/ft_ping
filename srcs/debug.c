@@ -37,15 +37,16 @@ void print_ip_header(void *packet) {
 //     uint32_t daddr;
 // };
 
-void dump_ip_header(char *packet) {
-    struct iphdr *ip = (void *)packet;
+void dump_ip_header(void *packet) {
+    struct iphdr *ip = (struct iphdr *)(packet + 28);
     struct sockaddr_in src, dst;
     char *dst_addr;
     char *src_addr;
+    char *pack_char = packet;
 
     printf("IP Hdr Dump:\n");
-    for (size_t i = 0; i < 20; i += 2) {
-        printf(" %02x%02x", (unsigned char)packet[i], (unsigned char)packet[i + 1]);
+    for (size_t i = 28; i < 48; i += 2) {
+        printf(" %02x%02x", (unsigned char)pack_char[i], (unsigned char)pack_char[i + 1]);
     }
     printf("\n");
     printf("Vr HL TOS  Len   ID Flg  off TTL Pro  cks      Src	Dst	Data\n");

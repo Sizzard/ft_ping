@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/select.h>
 #include <errno.h> 
 
 typedef struct s_ping {
@@ -43,7 +45,7 @@ void        opt_man(void);
 void        print_ip_header(void *packet);
 void        print_icmp_header(void *packet);
 void        dump_packet(char *packet);
-void        dump_ip_header(char *packet);
+void        dump_ip_header(void *packet);
 void        print_packet(char *packet, size_t len);
 char        *get_src_addr();
 char        *get_ip_address_from_domain(char *address);
