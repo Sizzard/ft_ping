@@ -18,19 +18,20 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/select.h>
 #include <errno.h> 
 
 typedef struct s_ping {
-    int     packet_sent;
-    int     packet_received;
-    int     packet_mean;
-    int     packet_len;
-    int     ttl;
-    int     tot_len;
-    char    *response;
-    char    *src;
-    char    *dst;
+    double       packet_sent;
+    double       packet_received;
+    double       packet_mean;
+    int          packet_len;
+    int          ttl;
+    int          tot_len;
+    char         *response;
+    char         *src;
+    char         *dst;
 }   t_ping;
 
 typedef struct s_response {

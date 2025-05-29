@@ -27,7 +27,7 @@ char *get_icmp_response(int type_nb, int code) {
         return strdup("Bad parsing in response");
     }
 
-    type[0][0] = "icmp_seq=%d ttl=%d time=%.3f ms\n";
+    type[0][0] = "icmp_seq=%.0f ttl=%d time=%.3f ms\n";
     type[1][0] = "reserved\n";
     type[2][0] = type[1][0];
     type[3][0] = "Destination network unreachable\n";
@@ -195,8 +195,10 @@ int ft_ping(char *real_address, char *address) {
         return 1;
     }
 
-    fd_set readfds;
-    struct timeval tv = {0};
+    struct pollfd popol;
+
+    popol.fd = sock;
+    popol.events = POLLIN | POLLOUT;
 
     fcntl(sock, F_SETFL, O_NONBLOCK);
     
@@ -209,24 +211,29 @@ int ft_ping(char *real_address, char *address) {
         printf("PING %s (%s): %d data bytes\n", real_address, address, ping->packet_len - 8);
     }
     
+    poll(&popol, 1, 0);
+    
     while (sigint_g != SIGINT) {
 
-        FD_ZERO(&readfds);
-        FD_SET(sock, &readfds);
-        
         ping->packet_len = sizeof(struct iphdr) + craft_icmp_packet(packet, ping);
 
-        int bytes = sendto(sock, packet, ping->packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
-        if (bytes > 0) {
-            ping->packet_sent++;
+        int bytes = 0;
+        if (popol.revents & POLLOUT) {   
+            bytes = sendto(sock, packet, ping->packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
+            printf("Sended %d bytes\n", bytes);
+            usleep(20000);
+            if (bytes > 0) {
+                ping->packet_sent++;
+            }
         }
 
-        // dump_packet(packet);
-        int rv = select(sock + 1, &readfds, NULL, NULL, &tv);
+        poll(&popol, 1, 0);
 
-        if (rv == 1) {
-            printf("TEST\n");
-            bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, 0);
+        printf("POLLIN : %d POLLOUT :%d\n", popol.revents & POLLIN, popol.revents & POLLOUT);
+
+        // dump_packet(packet);
+        if (popol.revents & POLLIN) {   
+            bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, NULL);
             if (bytes > 0) {
                 bytes -= 20;
                 t_response response = parse_response(recv_buf);
@@ -251,11 +258,11 @@ int ft_ping(char *real_address, char *address) {
         ping->packet_mean = 100;
     }
     else {
-        ping->packet_mean = (1 - ping->packet_sent / ping->packet_received) * 100;
+        ping->packet_mean = (1 - ping->packet_received / ping->packet_sent) * 100;
     }
 
     printf("--- %s ping statistics ---\n", real_address);
-    printf("%d packets transmitted, %d packets received, %d%% packet loss\n", ping->packet_sent, ping->packet_received, ping->packet_mean);
+    printf("%.0f packets transmitted, %.0f packets received, %.0f%% packet loss\n", ping->packet_sent, ping->packet_received, ping->packet_mean);
     close(sock);
     //  free() all
     return 0;
