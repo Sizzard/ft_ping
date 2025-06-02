@@ -70,7 +70,6 @@ char *get_src_addr() {
                         return NULL;
                     }
                     if (!strncmp("127.", host, 4) == 0 && !strncmp("0.", host, 2) == 0) {
-                        printf("src address: <%s>\n", host);
                         freeifaddrs(ifaddr);
                         return strdup(host);
                     }
@@ -98,4 +97,15 @@ uint16_t get_checksum(const void *buf, size_t len) {
         sum = (sum & 0xFFFF) + (sum >> 16);
 
     return (uint16_t)(~sum);
+}
+
+unsigned long getTimeStamp(void) {
+    struct timeval tv;
+    unsigned long time;
+    
+    gettimeofday(&tv, NULL);
+
+    time = 1000000 * tv.tv_sec + tv.tv_usec;
+
+    return time;
 }

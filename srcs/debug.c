@@ -78,12 +78,9 @@ void dump_packet(char *packet) {
     printf("\n");
 }
 
-void print_icmp_header(void *packet) {
+void print_icmp_header(void *packet, int bytes) {
     struct icmphdr *icmp = packet + 20;
-    printf("\nParsing of icmp header :");
-    printf("type :      %d\n", icmp->type);
-    printf("code :      %d\n", icmp->code);
-    printf("checksum :  %d\n\n", icmp->checksum);
+    printf("ICMP: type %d, code %d, size %d, id 0x%04x, seq 0x%04x\n", icmp->type, icmp->code, bytes, ntohs(icmp->un.echo.id), ntohs(icmp->un.echo.sequence));
 }
 
 void print_packet(char *packet, size_t len) {
