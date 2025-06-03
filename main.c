@@ -42,7 +42,7 @@ int parse_args(int ac, char **av) {
             case 0 :
                 if (strcmp(long_options[option_index].name, "ttl") == 0) {
                     if (!is_num(optarg)) {
-                        fprintf(stderr, "Invalid option\n");
+                        fprintf(stderr, "./ft_ping: option with invalid argument\n");
                         return 1;
                     }
                     args.ttl = atoi(optarg);
@@ -60,7 +60,7 @@ int parse_args(int ac, char **av) {
             case 's' :
                 // printf("option -s with value %s\n", optarg);
                 if (!is_num(optarg)) {
-                    fprintf(stderr, "Invalid option\n");
+                    fprintf(stderr, "./ft_ping: option with invalid argument\n");
                     return 1;
                 }
                 args.size = atoi(optarg);
@@ -72,7 +72,7 @@ int parse_args(int ac, char **av) {
             case 'c' :
                 // printf("option -c with value %s\n", optarg);
                 if (!is_num(optarg)) {
-                    fprintf(stderr, "Invalid option\n");
+                    fprintf(stderr, "./ft_ping: option with invalid argument\n");
                     return 1;
                 }
                 args.count = atoi(optarg);
@@ -80,7 +80,7 @@ int parse_args(int ac, char **av) {
             case 'i' :
                 // printf("option -i with value %s\n", optarg);
                 if (!is_num(optarg)) {
-                    fprintf(stderr, "Invalid option\n");
+                    fprintf(stderr, "./ft_ping: option with invalid argument\n");
                     return 1;
                 }
                 args.interval = atoi(optarg);
