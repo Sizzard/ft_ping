@@ -109,3 +109,13 @@ unsigned long getTimeStamp(void) {
 
     return time;
 }
+
+bool is_num(char *str) {
+    while(*str) {
+        if (*str < '0' || *str > '9') {
+            return false;
+        }
+        str++;
+    }
+    return true;
+}

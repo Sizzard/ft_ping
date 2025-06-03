@@ -6,7 +6,7 @@ CFLAGS = -Wall -Wextra -Werror -g3
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	cc $(CFLAGS) -o $(NAME) $(OBJ)
+	cc $(CFLAGS) -o $(NAME) $(OBJ) -lm
 
 %.o:%.c ft_ping.h
 	cc $(CFLAGS) -c -o $@ $<

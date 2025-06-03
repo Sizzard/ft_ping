@@ -18,6 +18,7 @@
         "fcntl.h": "c",
         "select.h": "c",
         "poll.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "getopt.h": "c"
     }
 }
