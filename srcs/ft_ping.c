@@ -52,16 +52,6 @@ char *get_icmp_response(int type_nb, int code) {
 
 }
 
-char *get_dest_address(struct iphdr *ip) {
-    struct sockaddr_in src;
-    char *src_addr;
-
-    src.sin_addr.s_addr = ip->saddr;
-    src_addr = inet_ntoa(src.sin_addr);
-    
-    return strdup(src_addr);
-}
-
 float parse_time_stamp(char *packet) {
     unsigned long time;
     float res = 0;    
@@ -80,6 +70,16 @@ float parse_time_stamp(char *packet) {
     // printf("res = %f\n", res);
 
     return res;
+}
+
+char *get_dest_address(struct iphdr *ip) {
+    struct sockaddr_in src;
+    char *src_addr;
+
+    src.sin_addr.s_addr = ip->saddr;
+    src_addr = inet_ntoa(src.sin_addr);
+    
+    return strdup(src_addr);
 }
 
 t_response parse_response(void *buf, int bytes) {
@@ -107,29 +107,7 @@ t_response parse_response(void *buf, int bytes) {
     return response;
 }
 
-void craft_ip_packet(char *packet, t_ping *ping) {
-    int packet_len;
-    struct iphdr *ip = (struct iphdr*)packet;
-
-    ip->version = 4;
-    ip->ihl = 5;
-    ip->tos = 0;
-    ip->tot_len = htons(ping->tot_len);
-    ip->id = htons(12345);
-    ip->frag_off = 0;
-    ip->ttl = ping->ttl;
-    ip->protocol = IPPROTO_ICMP;
-    ip->check = 0;
-    ip->saddr = inet_addr(ping->src);
-    ip->daddr = inet_addr(ping->dst);
-
-    packet_len = sizeof(struct iphdr);
-
-    ip->check = get_checksum(ip, packet_len);
-}
-
 int create_socket() {
-    int opt_value = 1;
     int sock;
 
     sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -138,20 +116,16 @@ int create_socket() {
         return -1;
     }
 
-    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &opt_value, sizeof(opt_value))) {
-        fprintf(stderr, "ft_ping: Failed to set header value: setsockopt()");
-        return -1;
+    if (setsockopt(sock, IPPROTO_IP, IP_TTL, &args.ttl, sizeof(args.ttl)) == -1) {
+        fprintf(stderr, "ft_ping: Failed to change ttl value\n");
+        return -1;   
     }
+
     return sock;
 }
 
-t_ping *init_ping_packet(char *dst, int tot_len) {
+t_ping *init_ping_packet(int data_len) {
     t_ping *ping = malloc(sizeof(t_ping));
-
-    char *src_address =  get_src_addr();
-    if (src_address == NULL) {
-        return NULL;
-    }
 
     if (ping) {
         ping->packet_sent = 0;
@@ -159,9 +133,7 @@ t_ping *init_ping_packet(char *dst, int tot_len) {
         ping->packet_mean = 0;
         ping->packet_len = 0;
         ping->ttl = args.ttl;
-        ping->src = src_address;
-        ping->dst = dst;
-        ping->tot_len = tot_len;
+        ping->data_len = data_len;
         ping->id = getpid();
         ping->stats.min = -1;
         ping->stats.max = -1;
@@ -172,12 +144,12 @@ t_ping *init_ping_packet(char *dst, int tot_len) {
 }
 
 int craft_icmp_packet(char *packet, t_ping *ping) {
-    int packet_len = 0;
+    int packet_len = ping->data_len + 8;
     struct icmphdr *icmp;
-    char payload[2048] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    char payload[64] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     unsigned long time = getTimeStamp();
 
-    icmp = (struct icmphdr *)(packet + sizeof(struct iphdr));
+    icmp = (struct icmphdr *)(packet);
 
     icmp->type = 8;
     icmp->code = 0;
@@ -185,11 +157,18 @@ int craft_icmp_packet(char *packet, t_ping *ping) {
     icmp->un.echo.sequence = htons(ping->packet_sent);
     icmp->checksum = 0;
 
-    packet_len = ping->tot_len - 20;
-
     memcpy(payload, (char *)&time, 8);
 
-    memcpy(packet + sizeof(struct iphdr) + (sizeof(icmp)), payload, ping->tot_len - 28);
+    for (int i = 0; i < ping->data_len; i += 64) {
+        // printf("Copying from %d to %d stop at %d\n", i , i + 64, ping->data_len);
+        if (ping->data_len < i + 64) {
+            // printf("Copying %d\n", ping->data_len - i);
+            memcpy(packet + (sizeof(icmp)) + i, payload, ping->data_len - i);            
+        }
+        else {
+            memcpy(packet + (sizeof(icmp)) + i, payload, 64);
+        }
+    }
 
     icmp->checksum = get_checksum(icmp, packet_len);
 
@@ -229,17 +208,26 @@ void update_ping_stats(t_ping *ping, float response_time) {
 
 }
 
+void free_all(char *packet, char *recv_buf, t_ping *ping, int sock) {
+    close(sock);
+    free(packet);
+    free(recv_buf);
+    free(ping);
+}
+
 int ft_ping(char *real_address, char *address) {
-    char packet[2048] = {0};
-    char recv_buf[2048] = {0};
+    char *packet = calloc(PACKET_SIZE , 1);
+    char *recv_buf = calloc(RECV_BUFF_SIZE, 1);
     t_ping *ping;
     struct sockaddr_in addr;
-    int sock;
+    int sock = 0;
 
-    ping = init_ping_packet(address, sizeof(struct iphdr) + args.size + 8);
+    // printf("Calloc'd : %d\n", RECV_BUFF_SIZE);
+
+    ping = init_ping_packet(args.size);
     if (ping == NULL) {
         fprintf(stderr, "ft_ping: Ran out of memory\n");
-        free(ping);
+        free_all(packet, recv_buf, ping, sock);
         return 1;
     }
     // printf("address : %s\n", address);
@@ -251,7 +239,7 @@ int ft_ping(char *real_address, char *address) {
     
     sock = create_socket();
     if (sock == -1) {
-        free(ping);
+        free_all(packet, recv_buf, ping, sock);
         return 1;
     }
     
@@ -271,29 +259,23 @@ int ft_ping(char *real_address, char *address) {
 
     signal_handler();
 
-    craft_ip_packet(packet, ping);
-
     poll(&popol, 1, 0);
     
     while (g_sigint != SIGINT && ping->packet_sent != args.count) {
 
-        ping->packet_len = sizeof(struct iphdr) + craft_icmp_packet(packet, ping);
+        ping->packet_len = craft_icmp_packet(packet, ping);
 
         int bytes = 0;
         if (!(popol.revents & POLLOUT) ) {
             fprintf(stderr, "ft_ping: sending packet: No buffer space available\n");
-            close(sock);
-            free(ping->src);
-            free(ping);
+            free_all(packet, recv_buf, ping, sock);
             return 1;
         }
         bytes = sendto(sock, packet, ping->packet_len, 0, (const struct sockaddr *)&addr, sizeof(addr));
         // printf("Sended %d bytes\n", bytes);
         if (bytes <= 0) {
             fprintf(stderr, "ft_ping: sending packet: No buffer space available\n");
-            close(sock);
-            free(ping->src);
-            free(ping);
+            free_all(packet, recv_buf, ping, sock);
             return 1;
         }
         ping->packet_sent++;
@@ -305,7 +287,7 @@ int ft_ping(char *real_address, char *address) {
             poll(&popol, 1, 0);
             // dump_packet(packet);
             if (popol.revents & POLLIN) {
-                bytes = recvfrom(sock, recv_buf, sizeof(recv_buf), 0, 0, NULL);
+                bytes = recvfrom(sock, recv_buf, RECV_BUFF_SIZE, 0, 0, NULL);
                 if (bytes > 0) {
                     // printf("Received %d bytes\n", bytes);
                     bytes -= 20;
@@ -317,7 +299,7 @@ int ft_ping(char *real_address, char *address) {
                         continue;
                     }
                     ping->response = response.string;
-                    if (response.time == -1) {
+                    if (response.type == 0 && response.time == -1) {
                         ping->response[36] = '\n';
                         ping->response[37] = 0;
                     }
@@ -345,24 +327,14 @@ int ft_ping(char *real_address, char *address) {
         usleep(200);
     }
 
-    if (ping->packet_received == 0) {
-        ping->packet_mean = 100;
-    }
-    else if (ping->packet_received == ping->packet_sent) {
-        ping->packet_mean = 0;
-    }
-    else {
-        ping->packet_mean = (ping->packet_received / ping->packet_sent) * 100;
-    }
+    ping->packet_mean = get_packet_mean(ping);
 
     printf("--- %s ping statistics ---\n", real_address);
     printf("%d packets transmitted, %d packets received, %.0f%% packet loss\n", ping->packet_sent, ping->packet_received, ping->packet_mean);
     if (ping->packet_received != 0 && ping->stats.min != -1) {
         printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n", ping->stats.min, ping->stats.avg, ping->stats.max, ping->stats.std);
     }
-    close(sock);
-    free(ping->src);
-    free(ping);
+    free_all(packet, recv_buf, ping, sock);
     return 0;
 }
 

@@ -79,7 +79,7 @@ void dump_packet(char *packet) {
 }
 
 void print_icmp_header(void *packet, int bytes) {
-    struct icmphdr *icmp = packet + 20;
+    struct icmphdr *icmp = packet;
     printf("ICMP: type %d, code %d, size %d, id 0x%04x, seq 0x%04x\n", icmp->type, icmp->code, bytes, ntohs(icmp->un.echo.id), ntohs(icmp->un.echo.sequence));
 }
 

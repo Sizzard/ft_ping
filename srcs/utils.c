@@ -40,46 +40,6 @@ char *get_ip_address_from_domain(char *address) {
     return res;
 }
 
-char *get_src_addr() {
-    struct ifaddrs *ifaddr;
-           int family, s;
-           char host[NI_MAXHOST];
-
-           if (getifaddrs(&ifaddr) == -1) {
-               perror("getifaddrs");
-               exit(EXIT_FAILURE);
-           }
-
-           /* Walk through linked list, maintaining head pointer so we
-              can free list later. */
-
-           for (struct ifaddrs *ifa = ifaddr; ifa != NULL;
-                    ifa = ifa->ifa_next) {
-               if (ifa->ifa_addr == NULL)
-                   continue;
-
-               family = ifa->ifa_addr->sa_family;
-
-               if (family == AF_INET) {
-                   s = getnameinfo(ifa->ifa_addr,
-                           sizeof(struct sockaddr_in),
-                           host, NI_MAXHOST,
-                           NULL, 0, NI_NUMERICHOST);
-                    if (s != 0) {
-                        fprintf(stderr, "ERROR on getnameinfo()\n");
-                        return NULL;
-                    }
-                    if (!strncmp("127.", host, 4) == 0 && !strncmp("0.", host, 2) == 0) {
-                        freeifaddrs(ifaddr);
-                        return strdup(host);
-                    }
-               }
-           }
-
-           freeifaddrs(ifaddr);
-           return NULL;
-}
-
 uint16_t get_checksum(const void *buf, size_t len) {
     uint32_t sum = 0;
     const uint16_t *packet = buf;
@@ -118,4 +78,17 @@ bool is_num(char *str) {
         str++;
     }
     return true;
+}
+
+double get_packet_mean(t_ping *ping) {
+    double sent = ping->packet_sent;
+    double received = ping->packet_received;
+    
+    double res = (((received / sent) * 100) - 100);
+
+    if (res < 0) {
+        res *= -1;
+    }
+
+    return res;
 }

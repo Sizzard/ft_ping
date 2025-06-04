@@ -26,6 +26,11 @@
 #include <math.h>
 #include <getopt.h>
 
+#define PACKET_SIZE 1028 > args.size + 8 ? 1028 : args.size + 8
+#define RECV_BUFF_SIZE 1028 > args.size + 8 ? 1028 : args.size + 28
+
+#define TTL_VALUE 128
+
 typedef struct s_stats {
     float        min;
     float        avg;      
@@ -41,11 +46,9 @@ typedef struct s_ping {
     int          packet_sent;
     int          packet_len;
     int          ttl;
-    int          tot_len;
+    int          data_len;
     int          id;
     char         *response;
-    char         *src;
-    char         *dst;
     t_stats      stats;
 
 }   t_ping;
@@ -78,6 +81,7 @@ void            sigint_handler_func(int signo);
 void            signal_handler(void);
 
 bool            is_num(char *str);
+double          get_packet_mean(t_ping *ping);
 
 void            print_ip_header(void *packet);
 void            print_icmp_header(void *packet, int bytes);
@@ -85,6 +89,5 @@ void            dump_packet(char *packet);
 void            dump_ip_header(void *packet);
 void            print_packet(char *packet, size_t len);
 unsigned long   getTimeStamp(void); 
-char            *get_src_addr();
 char            *get_ip_address_from_domain(char *address);
 uint16_t        get_checksum(const void *buf, size_t len);
